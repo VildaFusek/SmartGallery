@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "SmartGallery (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "SmartGallery (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

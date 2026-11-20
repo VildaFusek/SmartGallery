@@ -1,0 +1,40 @@
+# Visual Studio and .NET outputs
+.vs/
+**/[Bb]in/
+**/[Oo]bj/
+[Aa]rtifacts/
+[Aa]pp[Pp]ackages/
+[Tt]est[Rr]esults/
+*.user
+*.suo
+*.rsuser
+*.pubxml.user
+*.binlog
+*.log
+
+# Local credentials and signing keys
+.env
+.env.*
+*.pfx
+*.p12
+*.key
+*.pem
+*.snk
+
+# Local library, SQLite and model downloads
+.smartgallery-trash/
+*.db
+*.db-*
+*.db.*.tmp*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.onnx
+*.onnx_data
+*.download
+/models/*
+!/models/manifest.json
+*.zip
+*.msix
+*.msixbundle

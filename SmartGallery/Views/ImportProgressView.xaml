@@ -1,0 +1,19 @@
+<UserControl
+    x:Class="SmartGallery.Views.ImportProgressView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Spacing="12" MaxWidth="460">
+        <TextBlock Text="Soubory se pouze kopírují. Originály zůstávají beze změny; existující cíle se nepřepisují." TextWrapping="Wrap" />
+        <TextBlock Text="Datum z metadat; bez data → BezData. Při neúplné analýze se kopírování nespustí." TextWrapping="Wrap" />
+        <TextBlock Text="{x:Bind ViewModel.Phase, Mode=OneWay}" TextWrapping="Wrap" />
+        <ProgressRing IsActive="{x:Bind ViewModel.IsRunning, Mode=OneWay}" Width="28" Height="28" HorizontalAlignment="Left" />
+        <TextBlock Text="{x:Bind ViewModel.Statistics, Mode=OneWay}" TextWrapping="Wrap" />
+        <ProgressBar Value="{x:Bind ViewModel.FilePercent, Mode=OneWay}" Minimum="0" Maximum="100" />
+        <TextBlock Text="Průběh aktuálně kopírovaného souboru" FontSize="12" />
+        <Expander Header="Log (posledních 80 záznamů)" IsExpanded="False" HorizontalAlignment="Stretch">
+            <TextBox Text="{x:Bind ViewModel.LogText, Mode=OneWay}"
+                     IsReadOnly="True" TextWrapping="Wrap" Height="180"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" />
+        </Expander>
+    </StackPanel>
+</UserControl>

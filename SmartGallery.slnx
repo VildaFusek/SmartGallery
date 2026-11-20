@@ -1,0 +1,25 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="SmartGallery/SmartGallery.csproj">
+    <Platform Solution="*|ARM64" Project="ARM64" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="*|x86" Project="x86" />
+    <Deploy />
+  </Project>
+  <Folder Name="/src/">
+    <Project Path="src/SmartGallery.Domain/SmartGallery.Domain.csproj" />
+    <Project Path="src/SmartGallery.Application/SmartGallery.Application.csproj" />
+    <Project Path="src/SmartGallery.Infrastructure/SmartGallery.Infrastructure.csproj" />
+    <Project Path="src/SmartGallery.Imaging/SmartGallery.Imaging.csproj" />
+    <Project Path="src/SmartGallery.AI/SmartGallery.AI.csproj">
+      <Platform Solution="*|ARM64" Project="ARM64" />
+      <Platform Solution="*|x64" Project="x64" />
+      <Platform Solution="*|x86" Project="x86" />
+    </Project>
+    <Project Path="src/SmartGallery.Worker/SmartGallery.Worker.csproj" />
+  </Folder>
+</Solution>

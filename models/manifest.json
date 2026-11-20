@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "modelId": "florence-2-base-ft-fp32",
+  "baseModel": "microsoft/Florence-2-base-ft",
+  "repository": "onnx-community/Florence-2-base-ft",
+  "revision": "e88a44eaf3791a35eae0c5a47b3dbcd36e67eb6f",
+  "license": "MIT",
+  "format": "ONNX",
+  "precision": "FP32",
+  "files": [
+    {
+      "path": "onnx/vision_encoder.onnx",
+      "bytes": 366549825,
+      "sha256": "d67258cdfdebfa21285dad9e7bd4bd99725236d0aaef9e474a1b24a6ec471351"
+    },
+    {
+      "path": "onnx/embed_tokens.onnx",
+      "bytes": 157560044,
+      "sha256": "90cae3deb6406938c676a35b5246db02b478c9cc8cf93508361be80c05babf95"
+    },
+    {
+      "path": "onnx/encoder_model.onnx",
+      "bytes": 173380723,
+      "sha256": "cb0bccc232c64290397f5e1235eb3e1fa6ccf8c5afed9216480ee4eed80737fc"
+    },
+    {
+      "path": "onnx/decoder_model_merged.onnx",
+      "bytes": 388421753,
+      "sha256": "5207affad8815294233b8679ee9ecb614906f819a1890d95a01b9ca68c392a79"
+    },
+    {
+      "path": "added_tokens.json",
+      "bytes": 22410,
+      "sha256": "ba67457c577895525996e7a42d7da60a05856506ea4fd25ff9a023a64662f74b"
+    },
+    {
+      "path": "config.json",
+      "bytes": 5432,
+      "sha256": "d90c22ed72eb55291f183fcd9b98ebd3bd3d92bfcffb6c7f6e1606085e793525"
+    },
+    {
+      "path": "generation_config.json",
+      "bytes": 292,
+      "sha256": "7b8eb17bbd6cf8a07f619ad83ae03881eff05b6b9237bab89005b40e77783c29"
+    },
+    {
+      "path": "merges.txt",
+      "bytes": 456318,
+      "sha256": "1ce1664773c50f3e0cc8842619a93edc4624525b728b188a9e0be33b7726adc5"
+    },
+    {
+      "path": "preprocessor_config.json",
+      "bytes": 2673,
+      "sha256": "c892857e34a7082284983a7717717d39c9bf7e574f1f41d80d4c918c97502efa"
+    },
+    {
+      "path": "special_tokens_map.json",
+      "bytes": 146627,
+      "sha256": "72ff172dc769bc1551b1b4211628ce3271643bc60379e4da45d85a9be9332c39"
+    },
+    {
+      "path": "tokenizer.json",
+      "bytes": 2297961,
+      "sha256": "d69dcdb2323e124ac4f800cb9863ddccea0d7bb11e16125e8df3bd60f2f8aeac"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "bytes": 197658,
+      "sha256": "d8e64607233cb53b619fb46664f6cad08176c26e0e8735b2d30d888364f19600"
+    },
+    {
+      "path": "vocab.json",
+      "bytes": 1099884,
+      "sha256": "394fdc63c71aabe0a9b97117f5d62fb5fcc4d59b2b3ea929a3929e6a53217b3c"
+    },
+    {
+      "path": "LICENSE.txt",
+      "bytes": 1141,
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+      "url": "https://huggingface.co/microsoft/Florence-2-base-ft/resolve/f6c1a25888ffc1d945ee8a1a77ac833c7303d46e/LICENSE"
+    }
+  ]
+}
