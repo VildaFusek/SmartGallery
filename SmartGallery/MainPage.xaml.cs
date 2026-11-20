@@ -53,6 +53,7 @@ namespace SmartGallery
             ViewModel.PhotoAnalyzed += OnPhotoAnalyzed;
             UpdateTimelineSource();
             RebuildFolderTree();
+            StartTimelineTracking();
             if (ViewModel.ReloadCommand.CanExecute(null))
             {
                 await ViewModel.ReloadCommand.ExecuteAsync(null);
@@ -61,6 +62,7 @@ namespace SmartGallery
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
+            StopTimelineTracking();
             ViewModel.PropertyChanged -= OnGalleryPropertyChanged;
             ViewModel.PhotoAnalyzed -= OnPhotoAnalyzed;
             CancelPendingOperations();

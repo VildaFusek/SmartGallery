@@ -20,12 +20,14 @@ public sealed partial class GalleryViewModel
     private GalleryFile? _selectedFile;
     private int _selectionCount;
     private IReadOnlyList<GalleryFile> _visibleFiles = [];
+    private int[] _timelineGroupStarts = [];
 
     public IAsyncRelayCommand DescribeSelectionCommand { get; }
     public IAsyncRelayCommand<IReadOnlyList<GalleryFile>> DeleteCommand { get; }
 
     public string CurrentFolder => _currentFolder;
     public GalleryFolder? RootFolder { get; private set; }
+    public bool HasDisplayedLibrary => RootFolder is not null;
     public bool CanNavigateLibrary => (!IsBusy || _isAnalyzing) && _library is { } library && library.Id == _displayedLibraryId;
     public bool CanBrowse => CanNavigateLibrary && !IsTrashOpen;
     public bool CanChangeFilters => CanBrowse && !IsBusy;
@@ -115,6 +117,20 @@ public sealed partial class GalleryViewModel
     public GalleryFile? GetTimelineAnchor() =>
         TimelineGroups.FirstOrDefault(group => _currentFolder.Length == 0 ||
             group.YearKey == _currentFolder || group.SectionPath == _currentFolder)?[0];
+
+    internal GalleryTimelineGroup? GetTimelineGroupAt(int index)
+    {
+        if (index < 0 || index >= VisibleFiles.Count)
+        {
+            return null;
+        }
+
+        var groupIndex = Array.BinarySearch(_timelineGroupStarts, index);
+        return TimelineGroups[groupIndex >= 0 ? groupIndex : ~groupIndex - 1];
+    }
+
+    internal void TrackTimelineSection(GalleryTimelineGroup group) =>
+        SetProperty(ref _currentFolder, group.SectionPath, nameof(CurrentFolder));
 
     internal void CancelTimelineFilter() => _filterRequest?.Cancel();
 
@@ -207,16 +223,30 @@ public sealed partial class GalleryViewModel
     {
         var years = new List<GalleryFolder>();
         _folders = new(StringComparer.OrdinalIgnoreCase) { [""] = years };
-        foreach (var group in groups)
+        var starts = new int[groups.Count];
+        var groupIndex = 0;
+        var fileIndex = 0;
+        foreach (var year in groups.GroupBy(group => group.YearKey))
         {
-            if (!_folders.TryGetValue(group.YearKey, out var sections))
+            var sections = new List<GalleryFolder>();
+            var yearPhotos = 0;
+            var yearVideos = 0;
+            foreach (var group in year)
             {
-                sections = [];
-                _folders.Add(group.YearKey, sections);
-                years.Add(new GalleryFolder(group.YearLabel, group.YearKey));
+                starts[groupIndex++] = fileIndex;
+                fileIndex += group.Count;
+                // Každá sekce časové osy obsahuje jen jeden druh médií.
+                var photos = group[0].Kind == MediaKind.Photo ? group.Count : 0;
+                var videos = group.Count - photos;
+                sections.Add(new GalleryFolder(group.SectionLabel, group.SectionPath)
+                    { PhotoCount = photos, VideoCount = videos });
+                _folders.Add(group.SectionPath, []);
+                yearPhotos += photos;
+                yearVideos += videos;
             }
-            sections.Add(new GalleryFolder(group.SectionLabel, group.SectionPath));
-            _folders.Add(group.SectionPath, []);
+            _folders.Add(year.Key, sections);
+            years.Add(new GalleryFolder(year.First().YearLabel, year.Key)
+                { PhotoCount = yearPhotos, VideoCount = yearVideos });
         }
         while (_currentFolder.Length > 0 && !_folders.ContainsKey(_currentFolder))
         {
@@ -224,11 +254,14 @@ public sealed partial class GalleryViewModel
         }
 
         SetSelection(0, null);
-        VisibleFiles = files;
+        _timelineGroupStarts = starts;
         TimelineGroups = groups;
+        VisibleFiles = files;
         OnPropertyChanged(nameof(TimelineGroups));
-        RootFolder = _displayedLibraryId is null ? null : new GalleryFolder(_library?.Name ?? "Knihovna", "");
+        RootFolder = _displayedLibraryId is null ? null : new GalleryFolder(_library?.Name ?? "Knihovna", "")
+            { PhotoCount = _photoCount, VideoCount = _catalogFiles.Count - _photoCount };
         OnPropertyChanged(nameof(RootFolder));
+        OnPropertyChanged(nameof(HasDisplayedLibrary));
         EmptyMessage = _displayedLibraryId is null ? "Nastav cílovou složku spravované knihovny." :
             files.Count > 0 ? $"Zobrazeno: {files.Count} / {_catalogFiles.Count}" :
             _catalogFiles.Count > 0 ? "Filtru neodpovídá žádná položka." :
@@ -286,5 +319,10 @@ public sealed partial class GalleryViewModel
 
 public sealed record GalleryFolder(string Name, string RelativePath)
 {
+    public int PhotoCount { get; init; }
+    public int VideoCount { get; init; }
+    public bool HasPhotos => PhotoCount > 0;
+    public bool HasVideos => VideoCount > 0;
+
     public override string ToString() => Name;
 }

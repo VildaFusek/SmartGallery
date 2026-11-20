@@ -353,13 +353,53 @@
                 <CornerRadius x:Key="GridViewItemCornerRadius">8</CornerRadius>
             </Grid.Resources>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220" />
+                <ColumnDefinition Width="250" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <Border Padding="4,8" Style="{StaticResource GalleryCardStyle}">
                 <TreeView x:Name="FolderTree" SelectionMode="Single" ItemInvoked="OnFolderInvoked"
                           Expanding="OnFolderExpanding" AutomationProperties.Name="Navigace časovou osou"
-                           IsEnabled="{x:Bind ViewModel.CanNavigateLibrary, Mode=OneWay}" />
+                          IsEnabled="{x:Bind ViewModel.CanNavigateLibrary, Mode=OneWay}">
+                    <TreeView.ItemContainerStyle>
+                        <Style TargetType="TreeViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        </Style>
+                    </TreeView.ItemContainerStyle>
+                    <TreeView.ItemTemplate>
+                        <DataTemplate x:DataType="TreeViewNode">
+                            <Grid MinHeight="44">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{x:Bind ((vm:GalleryFolder)Content).Name}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTipService.ToolTip="{x:Bind ((vm:GalleryFolder)Content).Name}" />
+                                <StackPanel x:Name="PhotoCountBadge" x:Load="{x:Bind ((vm:GalleryFolder)Content).HasPhotos}"
+                                            Grid.Column="1" Orientation="Horizontal" Spacing="3" Margin="6,0,0,0"
+                                            VerticalAlignment="Center" ToolTipService.ToolTip="Počet fotografií">
+                                    <Viewbox Width="14" Height="14">
+                                        <SymbolIcon Symbol="Pictures" />
+                                    </Viewbox>
+                                    <TextBlock Text="{x:Bind ((vm:GalleryFolder)Content).PhotoCount}" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                                <StackPanel x:Name="VideoCountBadge" x:Load="{x:Bind ((vm:GalleryFolder)Content).HasVideos}"
+                                            Grid.Column="2" Orientation="Horizontal" Spacing="3" Margin="6,0,0,0"
+                                            VerticalAlignment="Center" ToolTipService.ToolTip="Počet videí">
+                                    <Viewbox Width="14" Height="14">
+                                        <SymbolIcon Symbol="Video" />
+                                    </Viewbox>
+                                    <TextBlock Text="{x:Bind ((vm:GalleryFolder)Content).VideoCount}" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
             </Border>
 
              <Grid x:Name="GalleryHost" Grid.Column="1" Background="Transparent" SizeChanged="OnGalleryHostSizeChanged"
@@ -462,13 +502,35 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                      <TextBlock Text="{x:Bind ViewModel.EmptyMessage, Mode=OneWay}" TextTrimming="CharacterEllipsis"
                                 Visibility="{x:Bind ViewModel.IsGalleryOpen, Mode=OneWay}"
                                 Style="{StaticResource GallerySecondaryTextStyle}" />
-                    <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.SelectionLabel, Mode=OneWay}"
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                Visibility="{x:Bind ViewModel.HasDisplayedLibrary, Mode=OneWay}">
+                        <TextBlock Text="Celkem" Style="{StaticResource GallerySecondaryTextStyle}"
+                                   VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Spacing="3" ToolTipService.ToolTip="Celkový počet fotografií">
+                            <Viewbox Width="14" Height="14">
+                                <SymbolIcon Symbol="Pictures" />
+                            </Viewbox>
+                            <TextBlock Text="{x:Bind ViewModel.RootFolder.PhotoCount, Mode=OneWay}" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="3" ToolTipService.ToolTip="Celkový počet videí">
+                            <Viewbox Width="14" Height="14">
+                                <SymbolIcon Symbol="Video" />
+                            </Viewbox>
+                            <TextBlock Text="{x:Bind ViewModel.RootFolder.VideoCount, Mode=OneWay}" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.SelectionLabel, Mode=OneWay}"
                                Style="{StaticResource GallerySecondaryTextStyle}" />
-                     <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.AnalysisSummary, Mode=OneWay}"
+                     <TextBlock Grid.Column="3" Text="{x:Bind ViewModel.AnalysisSummary, Mode=OneWay}"
                                 Visibility="{x:Bind ViewModel.IsGalleryOpen, Mode=OneWay}"
                                 Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" FontWeight="SemiBold" />
                 </Grid>
