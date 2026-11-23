@@ -142,6 +142,10 @@ internal sealed class FlorenceByteBpeTokenizer
                 bytes.Add(b);
             }
         }
-        return new UTF8Encoding(false, true).GetString(bytes.ToArray()).Trim();
+        try { return new UTF8Encoding(false, true).GetString(bytes.ToArray()).Trim(); }
+        catch (DecoderFallbackException error)
+        {
+            throw new InvalidDataException("AI vytvořila nečitelný text. Popis fotografie se neuložil.", error);
+        }
     }
 }

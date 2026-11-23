@@ -1,0 +1,34 @@
+<Window
+    x:Class="SmartGallery.AnalysisWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Analýza galerie">
+    <ScrollViewer>
+        <StackPanel Padding="24" Spacing="10">
+            <TextBlock Text="Analýza galerie" Style="{ThemeResource TitleTextBlockStyle}" />
+            <TextBlock Text="Galerii můžete dál procházet. Návrhy k úklidu se zobrazí zde. Minimalizací kontrola pokračuje, zavřením okna ji zastavíte." TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <ComboBox x:Name="Scope" SelectedIndex="0" AutomationProperties.Name="Rozsah kontroly">
+                    <ComboBoxItem Content="Celá galerie" /><ComboBoxItem Content="Vybrané fotografie" />
+                </ComboBox>
+                <Button x:Name="Start" Content="Spustit kontrolu" />
+                <Button x:Name="Stop" Content="Zastavit" IsEnabled="False" />
+            </StackPanel>
+            <TextBlock x:Name="Phase" Text="Připraveno ke kontrole." FontWeight="SemiBold" TextWrapping="Wrap" />
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="140" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Image x:Name="Thumbnail" Height="100" Stretch="Uniform" />
+                <TextBlock x:Name="Details" Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap" />
+            </Grid>
+            <TextBlock x:Name="FileLabel" Text="Aktuální krok" />
+            <ProgressBar x:Name="FileBar" Maximum="100" />
+            <TextBlock x:Name="TotalLabel" Text="Celá úloha" />
+            <ProgressBar x:Name="TotalBar" Maximum="100" />
+            <TextBlock Text="Poslední události" FontWeight="SemiBold" />
+            <ListView x:Name="History" Height="170" SelectionMode="None" />
+            <Expander x:Name="IssuePanel" Header="Přeskočené fotografie" Visibility="Collapsed" HorizontalAlignment="Stretch">
+                <ListView x:Name="Issues" MaxHeight="180" SelectionMode="None" />
+            </Expander>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

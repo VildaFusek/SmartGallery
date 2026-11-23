@@ -28,6 +28,7 @@ public sealed partial class GalleryViewModel
                 OnPropertyChanged(nameof(CanChangeFilters));
                 OnPropertyChanged(nameof(CanDelete));
                 DeleteCommand.NotifyCanExecuteChanged();
+                DeletePermanentlyCommand.NotifyCanExecuteChanged();
                 DescribeSelectionCommand.NotifyCanExecuteChanged();
                 NotifyGalleryAnalysisActions();
                 NotifyTrashActions();

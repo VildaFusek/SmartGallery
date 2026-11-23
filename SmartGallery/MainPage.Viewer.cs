@@ -1,9 +1,11 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using SmartGallery.Application.Catalog;
 using SmartGallery.Domain;
+using SmartGallery.Imaging;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.System;
@@ -13,7 +15,11 @@ namespace SmartGallery;
 public sealed partial class MainPage
 {
     private CancellationTokenSource? _previewLoad;
+    private GalleryFile? _previewFile;
+    private CancellationTokenSource? _photoConversion;
+    private Task? _photoConversionTask;
     private Control? _previewReturnFocus;
+    private double _thumbnailScale = 1;
     private bool _showFileDetails;
     private bool _fitPreview;
 
@@ -22,6 +28,7 @@ public sealed partial class MainPage
 
     private void SetDetailsMode(bool show, GalleryFile? anchor)
     {
+        StopTileVideo();
         if (_showFileDetails == show)
         {
             return;
@@ -48,23 +55,60 @@ public sealed partial class MainPage
         }
     }
 
+    private void OnThumbnailSizeClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RadioMenuFlyoutItem { Tag: string tag } || !int.TryParse(tag, out var percent) ||
+            _thumbnailScale == percent / 100d)
+        {
+            return;
+        }
+
+        EndMarquee();
+        _thumbnailScale = percent / 100d;
+        if (!_showFileDetails && GalleryGrid.ItemsPanelRoot is ItemsWrapGrid panel)
+        {
+            var last = Math.Min(panel.LastCacheIndex, GalleryGrid.Items.Count - 1);
+            for (var index = Math.Max(0, panel.FirstCacheIndex); index <= last; index++)
+            {
+                if (GalleryGrid.ContainerFromIndex(index) is GridViewItem { Content: GalleryFile file } tile &&
+                    GetFileVisual(tile) is Image image && ReferenceEquals(image.Tag, file))
+                {
+                    ResetFileVisual(image);
+                    StartFileVisual(image, file);
+                }
+            }
+            UpdateGalleryItemSize(panel);
+        }
+    }
+
     private void OnGalleryHostSizeChanged(object sender, SizeChangedEventArgs e) => UpdateGalleryItemSize();
+
+    private void OnGalleryPanelLoaded(object sender, RoutedEventArgs e) => UpdateGalleryItemSize((ItemsWrapGrid)sender);
 
     private void UpdateGalleryItemSize()
     {
         if (GalleryGrid?.ItemsPanelRoot is ItemsWrapGrid panel)
         {
-            panel.MaximumRowsOrColumns = _showFileDetails ? 1 : -1;
-            panel.ItemWidth = _showFileDetails ? Math.Max(1, GalleryHost.ActualWidth - 24) : double.NaN;
+            UpdateGalleryItemSize(panel);
         }
+    }
+
+    private void UpdateGalleryItemSize(ItemsWrapGrid panel)
+    {
+        var viewportWidth = Math.Max(1, GalleryHost.ActualWidth - 24);
+        var thumbnailWidth = 172 * _thumbnailScale;
+        panel.MaximumRowsOrColumns = _showFileDetails ? 1 : -1;
+        panel.ItemWidth = _showFileDetails
+            ? viewportWidth
+            : GalleryHost.ActualWidth > 0 ? Math.Min(thumbnailWidth, viewportWidth) : thumbnailWidth;
+        panel.ItemHeight = _showFileDetails ? double.NaN : 150 * _thumbnailScale;
     }
 
     private void StartDetailsVisual(FrameworkElement visual, GalleryFile file)
     {
         if (visual.FindName("ExtensionBadge") is TextBlock badge)
         {
-            var extension = Path.GetExtension(file.Name);
-            badge.Text = extension.Length > 0 ? extension[1..].ToUpperInvariant() : "—";
+            badge.Text = ThumbnailMetadata.FormatExtension(file.Name);
         }
         if (visual.FindName("FileMetadata") is TextBlock metadata)
         {
@@ -100,15 +144,19 @@ public sealed partial class MainPage
     }
 
     private Task ShowPhotoAsync(GalleryFile file, Control? returnFocus) =>
-        ShowPhotoAsync(file.Name, returnFocus, token => ViewModel.GetGalleryReadPathAsync(file, token));
+        ShowPhotoAsync(file.Name, returnFocus, token => ViewModel.GetGalleryReadPathAsync(file, token), file);
 
-    private async Task ShowPhotoAsync(string name, Control? returnFocus, Func<CancellationToken, Task<string>> getPath)
+    private async Task ShowPhotoAsync(string name, Control? returnFocus, Func<CancellationToken, Task<string>> getPath,
+        GalleryFile? galleryFile = null)
     {
         if (PhotoViewer.Visibility == Visibility.Visible || _galleryConfirmation is not null)
         {
             return;
         }
 
+        StopTileVideo();
+        _previewFile = galleryFile;
+        PhotoConvertButton.Visibility = ShowWhen(galleryFile is not null);
         using var request = new CancellationTokenSource();
         _previewLoad = request;
         var token = request.Token;
@@ -226,6 +274,97 @@ public sealed partial class MainPage
 
     private void OnClosePreviewClick(object sender, RoutedEventArgs e) => ClosePhotoViewer();
 
+    private GalleryFile[] SelectedPhotos() =>
+        GalleryGrid.SelectedItems.OfType<GalleryFile>().Where(file => file.Kind == MediaKind.Photo).ToArray();
+
+    private async void OnSelectionPhotoConvert(object sender, RoutedEventArgs e) =>
+        await ConfigurePhotoConversionAsync(SelectedPhotos(), fromViewer: false);
+
+    private void OnSelectionPhotoCancel(object sender, RoutedEventArgs e) => _photoConversion?.Cancel();
+
+    private async void OnPhotoConvertClick(object sender, RoutedEventArgs e)
+    {
+        if (_previewFile is { } file) await ConfigurePhotoConversionAsync([file], fromViewer: true);
+    }
+
+    private async Task ConfigurePhotoConversionAsync(GalleryFile[] files, bool fromViewer)
+    {
+        if (files.Length == 0 || _photoConversion is not null || !ViewModel.CanChangeFilters) return;
+        PhotoOutputFormat[] formats = [PhotoOutputFormat.WebP, PhotoOutputFormat.WebPLossless, PhotoOutputFormat.Png, PhotoOutputFormat.Jpeg];
+        var picker = new ComboBox { ItemsSource = new[] { "WebP · menší soubor", "WebP · bezeztrátový", "PNG · optimalizované", "JPEG" }, SelectedIndex = 0 };
+        var quality = new Slider { Header = "Kvalita", Minimum = 1, Maximum = 100, StepFrequency = 1, Value = 82 };
+        picker.SelectionChanged += (_, _) => quality.Visibility = ShowWhen(picker.SelectedIndex is 0 or 3);
+        int?[] limits = [null, 8192, 4096, 2048];
+        var size = new ComboBox { Header = "Maximální délka delší strany", ItemsSource = new[] { "Původní rozměry", "8192 px", "4096 px", "2048 px" }, SelectedIndex = 0 };
+        var replace = new CheckBox { Content = "Nahradit původní kopii v galerii (bez koše)" };
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(picker);
+        panel.Children.Add(quality);
+        panel.Children.Add(size);
+        panel.Children.Add(new TextBlock { Text = "PNG a WebP zachovají průhlednost, JPEG ji nahradí bílou. Údaje EXIF se nepřenesou. Před nahrazením uvidíte skutečnou velikost výsledku.", TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(replace);
+        if (!await ShowConfirmedDialogAsync(new ContentDialog
+        {
+            Title = files.Length == 1 ? $"Převést {files[0].Name}?" : $"Převést vybrané fotografie ({files.Length})?",
+            Content = panel, PrimaryButtonText = "Převést",
+            CloseButtonText = "Storno", DefaultButton = ContentDialogButton.Close
+        }) || !ViewModel.CanChangeFilters ||
+            (fromViewer ? !ReferenceEquals(files[0], _previewFile) : !files.ToHashSet().SetEquals(SelectedPhotos()))) return;
+
+        ClosePhotoViewer();
+        var applyToAll = false;
+        await RunPhotoTaskAsync(token => ViewModel.ConvertPhotosAsync(files,
+                new PhotoConversionOptions(formats[picker.SelectedIndex], (int)quality.Value, limits[size.SelectedIndex]),
+                replace.IsChecked == true, async (file, result) =>
+                {
+                    if (applyToAll) return true;
+                    var difference = (double)(result.SourceBytes - result.OutputBytes) / result.SourceBytes;
+                    var message = $"Původní soubor: {result.SourceBytes:N0} B\nVýsledek: {result.OutputBytes:N0} B · {result.Width} × {result.Height} px\n" +
+                        (difference >= 0 ? $"Úspora: {difference:P1}." : $"Výsledek je o {-difference:P1} větší.") +
+                        "\nNahradí se pouze kopie v galerii, bez uložení do koše.";
+                    var content = new StackPanel { Spacing = 8 };
+                    content.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+                    var all = new CheckBox { Content = "Nahradit i všechny zbývající vybrané kopie (i větším souborem)" };
+                    if (files.Length > 1) content.Children.Add(all);
+                    var confirmed = await ShowConfirmedDialogAsync(new ContentDialog
+                    {
+                        Title = $"Nahradit {file.Name}?", Content = content, PrimaryButtonText = "Nahradit",
+                        CloseButtonText = "Zastavit", DefaultButton = ContentDialogButton.Close
+                    });
+                    applyToAll = confirmed && all.IsChecked == true;
+                    return confirmed;
+                }, token, ReportPhotoProgress));
+    }
+
+
+    private void ReportPhotoProgress(string label, int file, int batch)
+    {
+        PhotoFileProgress.Value = file;
+        PhotoBatchProgress.Value = batch;
+        PhotoFilePercent.Text = $"Soubor: {file} %";
+        PhotoBatchPercent.Text = $"Celá úloha: {batch} %";
+        AutomationProperties.SetName(PhotoFileProgress, label);
+    }
+
+    private async Task RunPhotoTaskAsync(Func<CancellationToken, Task> run)
+    {
+        if (_photoConversion is not null || !ViewModel.CanChangeFilters) return;
+        using var request = new CancellationTokenSource();
+        _photoConversion = request;
+        SelectionPhotoCancel.Visibility = PhotoProgressBanner.Visibility = Visibility.Visible;
+        try
+        {
+            _photoConversionTask = run(request.Token);
+            await _photoConversionTask;
+        }
+        finally
+        {
+            _photoConversion = null;
+            SelectionPhotoCancel.Visibility = PhotoProgressBanner.Visibility = Visibility.Collapsed;
+            _photoConversionTask = null;
+        }
+    }
+
     private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key == VirtualKey.Escape)
@@ -244,6 +383,7 @@ public sealed partial class MainPage
         var request = _previewLoad;
         _previewLoad = null;
         request?.Cancel();
+        _previewFile = null;
         PreviewImage.Source = null;
         PreviewStatus.Tag = null;
         PhotoViewer.Visibility = Visibility.Collapsed;

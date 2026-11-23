@@ -4,6 +4,7 @@ using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using SmartGallery.Application.Catalog;
 using SmartGallery.Application.AI;
+using SmartGallery.Application.Importing;
 using SmartGallery.Domain;
 using SmartGallery.Services;
 
@@ -46,6 +47,7 @@ public sealed partial class GalleryViewModel : ObservableObject, IDisposable
         IPhotoCaptionDialogService captionDialog,
         GalleryPhotoAnalyzer photoAnalyzer,
         GalleryPhotoDuplicates photoDuplicates,
+        IMediaDateReader mediaDates,
         ILogger<GalleryViewModel> logger)
     {
         _statusReader = statusReader;
@@ -60,6 +62,7 @@ public sealed partial class GalleryViewModel : ObservableObject, IDisposable
         _captionDialog = captionDialog;
         _photoAnalyzer = photoAnalyzer;
         _photoDuplicates = photoDuplicates;
+        _mediaDates = mediaDates;
         _logger = logger;
         ReloadCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy);
         ChooseLibraryCommand = new AsyncRelayCommand(ChooseLibraryAsync, () => !IsBusy && _canRegisterLibrary);
@@ -71,7 +74,9 @@ public sealed partial class GalleryViewModel : ObservableObject, IDisposable
         DescribeSelectionCommand = new AsyncRelayCommand(DescribeSelectionAsync,
             () => CanBrowse && !IsBusy && _readiness.CaptioningReady && SelectedFile?.Kind == MediaKind.Photo);
         DeleteCommand = new AsyncRelayCommand<IReadOnlyList<GalleryFile>>(DeleteAsync,
-            files => CanDelete && files?.Count == SelectionCount);
+            files => CanChangeFilters && files is { Count: > 0 });
+        DeletePermanentlyCommand = new AsyncRelayCommand<IReadOnlyList<GalleryFile>>(DeletePermanentlyAsync,
+            files => CanChangeFilters && files is { Count: > 0 });
         AnalyzeGalleryCommand = new AsyncRelayCommand(AnalyzeGalleryAsync, CanAnalyzeGallery);
         ApplyGalleryNamesCommand = new AsyncRelayCommand<IReadOnlyList<GalleryFile>>(ApplyGalleryNamesAsync,
             files => CanApplyGalleryNames && files is { Count: > 0 });
@@ -118,6 +123,7 @@ public sealed partial class GalleryViewModel : ObservableObject, IDisposable
                 CaptionCommand.NotifyCanExecuteChanged();
                 DescribeSelectionCommand.NotifyCanExecuteChanged();
                 DeleteCommand.NotifyCanExecuteChanged();
+                DeletePermanentlyCommand.NotifyCanExecuteChanged();
                 NotifyTrashActions();
                 NotifyGalleryAnalysisActions();
                 OnPropertyChanged(nameof(CanDelete));
@@ -128,6 +134,10 @@ public sealed partial class GalleryViewModel : ObservableObject, IDisposable
                 OnPropertyChanged(nameof(CanEditImportSettings));
                 OnPropertyChanged(nameof(CanStartImport));
                 UpdateImportReadiness();
+                if (!value)
+                {
+                    TryStartCatalogRepair();
+                }
             }
         }
     }
@@ -278,7 +288,12 @@ public sealed partial class GalleryViewModel : ObservableObject, IDisposable
         StatusMessage = "Načítání stavu katalogu…";
         try
         {
+            var (_, auditMessage) = await AuditCatalogAsync(cancellationToken);
             await RefreshAsync(cancellationToken);
+            if (auditMessage is not null)
+            {
+                StatusMessage = auditMessage;
+            }
             if (IsTrashOpen && _library is { } library)
             {
                 try

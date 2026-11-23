@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media.Imaging;
 using SmartGallery.Application.Catalog;
 using SmartGallery.Domain;
+using SmartGallery.Infrastructure.Video;
 using SmartGallery.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
@@ -33,6 +34,7 @@ namespace SmartGallery
             var services = ((App)Microsoft.UI.Xaml.Application.Current).Services;
             ViewModel = services.GetRequiredService<GalleryViewModel>();
             FooterViewModel = services.GetRequiredService<ModelFooterViewModel>();
+            _videoService = services.GetRequiredService<GalleryVideoService>();
             InitializeComponent();
             InitializeGalleryInteraction();
         }
@@ -49,11 +51,19 @@ namespace SmartGallery
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            _mediaUiActive = true;
+            ViewModel.EnableCatalogRepair();
+            FooterViewModel.PropertyChanged += OnRequiredFilesChanged;
             ViewModel.PropertyChanged += OnGalleryPropertyChanged;
             ViewModel.PhotoAnalyzed += OnPhotoAnalyzed;
             UpdateTimelineSource();
             RebuildFolderTree();
             StartTimelineTracking();
+            SyncVideoSelection();
+            if (FooterViewModel.CheckVideoToolsCommand.CanExecute(null))
+            {
+                _ = FooterViewModel.CheckVideoToolsCommand.ExecuteAsync(null);
+            }
             if (ViewModel.ReloadCommand.CanExecute(null))
             {
                 await ViewModel.ReloadCommand.ExecuteAsync(null);
@@ -64,12 +74,23 @@ namespace SmartGallery
         {
             StopTimelineTracking();
             ViewModel.PropertyChanged -= OnGalleryPropertyChanged;
+            FooterViewModel.PropertyChanged -= OnRequiredFilesChanged;
             ViewModel.PhotoAnalyzed -= OnPhotoAnalyzed;
             CancelPendingOperations();
         }
 
         internal Task PendingGalleryChanges => Task.WhenAll(
+            _analysisTask ?? Task.CompletedTask,
+            _photoConversionTask ?? Task.CompletedTask,
+            _videoOperation ?? Task.CompletedTask,
+            _videoSelectionProbeTask ?? Task.CompletedTask,
+            _videoSelectionOperation ?? Task.CompletedTask,
+            _fileRenameOperation ?? Task.CompletedTask,
+            ViewModel.PendingCatalogRepair,
+            FooterViewModel.CheckVideoToolsCommand.ExecutionTask ?? Task.CompletedTask,
+            FooterViewModel.DownloadVideoToolsCommand.ExecutionTask ?? Task.CompletedTask,
             ViewModel.DeleteCommand.ExecutionTask ?? Task.CompletedTask,
+            ViewModel.DeletePermanentlyCommand.ExecutionTask ?? Task.CompletedTask,
             ViewModel.AnalyzeGalleryCommand.ExecutionTask ?? Task.CompletedTask,
             ViewModel.ApplyGalleryNamesCommand.ExecutionTask ?? Task.CompletedTask,
             ViewModel.FindDuplicatesCommand.ExecutionTask ?? Task.CompletedTask,
@@ -78,10 +99,22 @@ namespace SmartGallery
 
         internal void CancelPendingOperations()
         {
+            _mediaUiActive = false;
+            CancelAnalysis();
+            _analysisWindow?.Close();
+            _photoConversion?.Cancel();
+            ViewModel.CancelCatalogRepair();
+            _videoSelectionProbe?.Cancel();
+            _videoSelectionCancellation?.Cancel();
+            _fileRenameCancellation?.Cancel();
+            FooterViewModel.CheckVideoToolsCommand.Cancel();
+            FooterViewModel.DownloadVideoToolsCommand.Cancel();
             var confirmation = _galleryConfirmation;
             _galleryConfirmation = null;
             confirmation?.Hide();
             ClosePhotoViewer(restoreFocus: false);
+            CloseVideoViewer(restoreFocus: false);
+            StopTileVideo();
             EndMarquee();
             ViewModel.ReloadCommand.Cancel();
             ViewModel.ChooseLibraryCommand.Cancel();
@@ -91,6 +124,7 @@ namespace SmartGallery
             ViewModel.CaptionCommand.Cancel();
             ViewModel.DescribeSelectionCommand.Cancel();
             ViewModel.DeleteCommand.Cancel();
+            ViewModel.DeletePermanentlyCommand.Cancel();
             ViewModel.AnalyzeGalleryCommand.Cancel();
             ViewModel.ApplyGalleryNamesCommand.Cancel();
             ViewModel.FindDuplicatesCommand.Cancel();
@@ -144,6 +178,7 @@ namespace SmartGallery
 
         private void OnCancelGalleryWorkClick(object sender, RoutedEventArgs e)
         {
+            _photoConversion?.Cancel();
             ViewModel.AnalyzeGalleryCommand.Cancel();
             ViewModel.ApplyGalleryNamesCommand.Cancel();
             ViewModel.FindDuplicatesCommand.Cancel();
@@ -151,10 +186,15 @@ namespace SmartGallery
 
         private async void OnDeleteClick(object sender, RoutedEventArgs e) => await ConfirmDeleteSelectionAsync();
 
-        private async Task ConfirmDeleteSelectionAsync()
+        private async void OnDeletePermanentlyClick(object sender, RoutedEventArgs e) =>
+            await ConfirmDeleteSelectionAsync(permanent: true);
+
+        private async Task ConfirmDeleteSelectionAsync(bool permanent = false, GalleryFile? detailFile = null)
         {
-            var files = GalleryGrid.SelectedItems.OfType<GalleryFile>().ToArray();
-            if (XamlRoot is not { } root || !ViewModel.DeleteCommand.CanExecute(files))
+            GalleryFile[] files = detailFile is null ? GalleryGrid.SelectedItems.OfType<GalleryFile>().ToArray() : [detailFile];
+            var command = permanent ? ViewModel.DeletePermanentlyCommand : ViewModel.DeleteCommand;
+            if (XamlRoot is not { } root || _videoSelectionOperation is not null || _videoCancellation is not null ||
+                !command.CanExecute(files))
             {
                 return;
             }
@@ -163,21 +203,37 @@ namespace SmartGallery
             var dialog = new ContentDialog
             {
                 XamlRoot = root,
-                Title = files.Length == 1 ? "Přesunout kopii do koše galerie?" : "Přesunout označené kopie do koše?",
+                Title = permanent ? "Trvale smazat označené kopie?" :
+                    files.Length == 1 ? "Přesunout kopii do koše galerie?" : "Přesunout označené kopie do koše?",
                 Content = new TextBlock
                 {
-                    Text = $"{subject}\n\nVýběr zmizí z galerie a uloží se do složky .smartgallery-trash " +
-                           "ve spravované knihovně. Zdrojové originály se nezmění.",
+                    Text = permanent
+                        ? $"{subject}\n\nKopie budou trvale odstraněny, bez možnosti obnovy z koše. Zdrojové originály se nezmění."
+                        : $"{subject}\n\nVýběr zmizí z galerie a uloží se do složky .smartgallery-trash " +
+                          "ve spravované knihovně. Zdrojové originály se nezmění.",
                     TextWrapping = TextWrapping.Wrap
                 },
-                PrimaryButtonText = "Přesunout",
+                PrimaryButtonText = permanent ? "Trvale smazat" : "Přesunout",
                 CloseButtonText = "Zrušit",
                 DefaultButton = ContentDialogButton.Close
             };
-            if (await ConfirmGalleryChangeAsync(dialog) && ViewModel.DeleteCommand.CanExecute(files) &&
-                files.ToHashSet().SetEquals(GalleryGrid.SelectedItems.OfType<GalleryFile>()))
+            var timeline = ViewModel.TimelineGroups;
+            var offset = _galleryScrollViewer?.VerticalOffset;
+            if (await ConfirmGalleryChangeAsync(dialog) && command.CanExecute(files) &&
+                _videoSelectionOperation is null && _videoCancellation is null &&
+                (detailFile is not null ? ReferenceEquals(_videoFile, detailFile) :
+                    files.ToHashSet().SetEquals(GalleryGrid.SelectedItems.OfType<GalleryFile>())))
             {
-                await ViewModel.DeleteCommand.ExecuteAsync(files);
+                StopTileVideo();
+                if (detailFile is not null)
+                {
+                    CloseVideoViewer();
+                }
+                await command.ExecuteAsync(files);
+                if (offset is { } position && !ReferenceEquals(timeline, ViewModel.TimelineGroups))
+                {
+                    RestoreGalleryScrollPosition(position);
+                }
             }
         }
 
@@ -197,7 +253,11 @@ namespace SmartGallery
                 Content = new TextBlock
                 {
                     Text = "Delete v galerii – přesune výběr do koše po potvrzení.\n" +
+                           "Shift+Delete – po potvrzení trvale smaže označené kopie.\n" +
                            "Ctrl+A – označí všechna zobrazená média.\n" +
+                           "Úpravy → Označit více – kliknutí, zaškrtávátko nebo mezerník přepíná označení položky.\n" +
+                           "Tažením myši označíš položky v rámečku; s Ctrl přepneš jejich označení.\n" +
+                           "Zobrazení → Velikost miniatur – zvětší dlaždice galerie.\n" +
                            "Enter nebo dvojklik – otevře fotografii.\n" +
                            "Alt+Enter v galerii – přepne náhledy a podrobnosti.\n\n" +
                            "Koš galerie najdeš na konci stromu vlevo. Odtud můžeš vybrané kopie obnovit. " +
@@ -297,7 +357,9 @@ namespace SmartGallery
             SetAnalysisBadge(visual, file);
             if (visual is Image image)
             {
-                _ = LoadFileVisualAsync(image, (storageFile, token) => LoadThumbnailAsync(image, storageFile, token), file);
+                var requestedSize = (uint)(256 * _thumbnailScale);
+                _ = LoadFileVisualAsync(image, (storageFile, token) =>
+                    LoadThumbnailAsync(image, storageFile, token, requestedSize: requestedSize), file);
             }
             else
             {
@@ -307,6 +369,10 @@ namespace SmartGallery
 
         private void ResetFileVisual(FrameworkElement visual)
         {
+            if (ReferenceEquals(visual, _tileVideoImage))
+            {
+                StopTileVideo();
+            }
             if (_mediaRequests.Remove(visual, out var request))
             {
                 request.Cancel();
@@ -366,10 +432,10 @@ namespace SmartGallery
         }
 
         private static async Task LoadThumbnailAsync(Image image, StorageFile file, CancellationToken token,
-            bool fallbackToPhoto = false)
+            bool fallbackToPhoto = false, uint requestedSize = 256)
         {
             using var thumbnail = await file.GetThumbnailAsync(
-                ThumbnailMode.SingleItem, 256, ThumbnailOptions.UseCurrentScale).AsTask(token);
+                ThumbnailMode.SingleItem, requestedSize, ThumbnailOptions.UseCurrentScale).AsTask(token);
             if (thumbnail?.Type == ThumbnailType.Image)
             {
                 var bitmap = new BitmapImage();

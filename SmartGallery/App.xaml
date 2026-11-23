@@ -13,6 +13,8 @@
                     <SolidColorBrush x:Key="GalleryInsetBrush" Color="#FFE1EFFE" />
                     <SolidColorBrush x:Key="GalleryBorderBrush" Color="#FFA8C7E6" />
                     <SolidColorBrush x:Key="GallerySelectionBrush" Color="#FF087957" />
+                    <SolidColorBrush x:Key="GallerySelectionFrameBrush" Color="#FFFFB000" />
+                    <SolidColorBrush x:Key="GallerySelectionFrameEdgeBrush" Color="#FF172435" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="GalleryWorkspaceBrush" Color="#FF141D29" />
@@ -20,6 +22,8 @@
                     <SolidColorBrush x:Key="GalleryInsetBrush" Color="#FF162232" />
                     <SolidColorBrush x:Key="GalleryBorderBrush" Color="#FF344A64" />
                     <SolidColorBrush x:Key="GallerySelectionBrush" Color="#FF64DAB0" />
+                    <SolidColorBrush x:Key="GallerySelectionFrameBrush" Color="#FFFFD84D" />
+                    <SolidColorBrush x:Key="GallerySelectionFrameEdgeBrush" Color="#FF101720" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="GalleryWorkspaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
@@ -27,6 +31,8 @@
                     <SolidColorBrush x:Key="GalleryInsetBrush" Color="{ThemeResource SystemColorWindowColor}" />
                     <SolidColorBrush x:Key="GalleryBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
                     <SolidColorBrush x:Key="GallerySelectionBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="GallerySelectionFrameBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="GallerySelectionFrameEdgeBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
             <ResourceDictionary.MergedDictionaries>

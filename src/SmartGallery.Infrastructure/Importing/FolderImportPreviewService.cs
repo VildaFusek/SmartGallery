@@ -21,7 +21,8 @@ public sealed class FolderImportPreviewService(
 
     private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".mp4", ".mov", ".m4v", ".avi", ".mkv", ".mts", ".m2ts", ".webm", ".wmv", ".3gp", ".mpg", ".mpeg"
+        ".mp4", ".mov", ".m4v", ".avi", ".mkv", ".mts", ".m2ts", ".webm", ".wmv", ".3gp", ".3g2", ".mpg", ".mpeg",
+        ".flv", ".ogv", ".mxf", ".ts", ".vob"
     };
 
     internal static MediaKind? GetMediaKind(string extension) =>

@@ -80,7 +80,10 @@ public sealed partial class GalleryViewModel
         NotifyGalleryAnalysisActions();
     }
 
-    private async Task AnalyzeGalleryAsync(CancellationToken cancellationToken)
+    private Task AnalyzeGalleryAsync(CancellationToken cancellationToken) => AnalyzeGalleryAsync(cancellationToken, null);
+
+    private async Task AnalyzeGalleryAsync(CancellationToken cancellationToken, HashSet<Guid>? scope,
+        Action<string, int, int>? report = null, Action<GalleryFile, string>? detail = null, Action<GalleryFile, string>? issue = null)
     {
         if (!CanAnalyzeGallery() || _library is not { } library)
         {
@@ -90,8 +93,8 @@ public sealed partial class GalleryViewModel
         _isAnalyzing = true;
         IsBusy = true;
         GalleryWorkProgress = 0;
-        GalleryWorkActive = true;
-        var total = _photoCount - _analyzedPhotoCount;
+        GalleryWorkActive = report is null;
+        var total = scope is null ? _photoCount - _analyzedPhotoCount : scope.Count;
         var saved = 0;
         var failed = 0;
         string? firstFailure = null;
@@ -109,7 +112,7 @@ public sealed partial class GalleryViewModel
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     paths.Add(file.RelativePath);
-                    if (file is { Kind: MediaKind.Photo, Analysis: null })
+                    if (file is { Kind: MediaKind.Photo, Analysis: null } && (scope is null || scope.Contains(file.Id)))
                     {
                         photos.Add(file);
                     }
@@ -127,10 +130,12 @@ public sealed partial class GalleryViewModel
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 StatusMessage = $"Analýza {saved + failed + 1}/{total} · uloženo: {saved} · chyby: {failed} · {photo.RelativePath}";
+                report?.Invoke(StatusMessage, 0, (int)GalleryWorkProgress);
+                detail?.Invoke(photo, "AI vytváří popis fotografie.");
                 GalleryPhotoAnalysis? analysis = null;
                 try
                 {
-                    var path = await _galleryCatalog.GetReadPathAsync(library.RootPath, photo, cancellationToken);
+                    var path = await GetGalleryReadPathAsync(photo, cancellationToken);
                     analysis = await _photoAnalyzer.AnalyzeAsync(path, photo, cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
                     if (analysis.SuggestedName is { } name &&
@@ -176,9 +181,11 @@ public sealed partial class GalleryViewModel
                         }
                         OnPropertyChanged(nameof(AnalysisSummary));
                         PhotoAnalyzed?.Invoke(photo);
+                        detail?.Invoke(photo, $"Popis uložen: {analysis.Caption}");
                     }
                 }
                 GalleryWorkProgress = (saved + failed) * 100.0 / total;
+                report?.Invoke(StatusMessage, 100, (int)GalleryWorkProgress);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -188,14 +195,14 @@ public sealed partial class GalleryViewModel
         catch (Exception exception)
         {
             _logger.LogError(exception, "Analýza galerie selhala.");
-            interruption = $"Analýza přerušena: {exception.Message}";
+            interruption = "Kontrolu se nepodařilo dokončit. Obnovte galerii a zkuste to znovu.";
         }
         finally
         {
             var refreshError = saved > 0 ? await RefreshAfterGalleryWorkAsync() : "";
-            StatusMessage = $"Analýza · uloženo: {saved}/{total} · chyby: {failed}" +
+            StatusMessage = $"AI popisy: uloženo {saved} z {total}." + (failed > 0 ? $" Bez nového popisu: {failed}." : "") +
                 (interruption is null ? "" : $" · {interruption}") +
-                (firstFailure is null ? "" : $" · {firstFailure}") + refreshError;
+                (firstFailure is null || detail is not null ? "" : $" · {firstFailure}") + refreshError;
             GalleryWorkActive = false;
             _isAnalyzing = false;
             IsBusy = false;
@@ -204,7 +211,16 @@ public sealed partial class GalleryViewModel
         void LogFailure(GalleryFile file, Exception error)
         {
             failed++;
-            firstFailure ??= $"{file.RelativePath}: {error.Message}";
+            var message = error switch
+            {
+                InvalidDataException { InnerException: System.Text.DecoderFallbackException } or System.Text.DecoderFallbackException =>
+                    "AI vytvořila nečitelný popis. Fotografie zůstává v galerii bez nového popisu.",
+                FileNotFoundException or DirectoryNotFoundException => "Soubor už není na původním místě.",
+                UnauthorizedAccessException => "Galerie nemá oprávnění přečíst nebo uložit tento soubor.",
+                _ => "Popis se nepodařilo vytvořit nebo uložit. Fotografii lze zkusit analyzovat znovu."
+            };
+            issue?.Invoke(file, message);
+            firstFailure ??= $"{file.Name}: {message}";
             _logger.LogWarning(error, "Analýzu fotografie {File} se nepodařilo uložit nebo dokončit.", file.RelativePath);
         }
     }

@@ -3,6 +3,10 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="NetVips" Version="3.2.0" />
+    <PackageVersion Include="NetVips.Native.win-x64" Version="8.18.7" />
+    <PackageVersion Include="NetVips.Native.win-x86" Version="8.18.7" />
+    <PackageVersion Include="NetVips.Native.win-arm64" Version="8.18.7" />
     <PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
     <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
     <PackageVersion Include="Microsoft.WindowsAppSDK.ML" Version="2.7.0" />

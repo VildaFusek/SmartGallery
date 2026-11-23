@@ -2,26 +2,35 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 using SmartGallery.Application.AI;
+using SmartGallery.Infrastructure.Video;
 using SmartGallery.Services;
 
 namespace SmartGallery.ViewModels;
 
-public sealed class ModelFooterViewModel : ObservableObject, IDisposable
+public sealed partial class ModelFooterViewModel : ObservableObject, IDisposable
 {
     private readonly ILocalModelPreparation _preparation;
     private readonly DispatcherQueue _dispatcher;
     private ModelPreparationSnapshot _snapshot;
     private bool _disposed;
 
-    public ModelFooterViewModel(ILocalModelPreparation preparation, AppReadinessState modules)
+    public ModelFooterViewModel(ILocalModelPreparation preparation, AppReadinessState modules, FfmpegTools tools)
     {
         _preparation = preparation;
         Modules = modules;
         _dispatcher = DispatcherQueue.GetForCurrentThread()
             ?? throw new InvalidOperationException("Stavová lišta musí vzniknout na UI threadu.");
         _snapshot = preparation.Current;
-        RetryCommand = new RelayCommand(preparation.Retry, () => !IsActive);
+        RetryCommand = new RelayCommand(preparation.Retry, () => !IsActive &&
+            _snapshot.Phase != ModelPreparationPhase.RuntimeValidated);
         CancelCommand = new RelayCommand(preparation.Cancel, () => IsActive);
+        CheckVideoToolsCommand = new AsyncRelayCommand(token => PrepareVideoToolsAsync(tools, false, token),
+            () => !_videoToolsChecked && !VideoSetupActive && FfmpegTools.IsSupported);
+        DownloadVideoToolsCommand = new AsyncRelayCommand(token => PrepareVideoToolsAsync(tools, true, token),
+            () => CanDownloadVideoTools);
+        VideoSetupMessage = FfmpegTools.IsSupported ? "Čekám na místní kontrolu."
+            : "Tento balíček je dostupný pouze pro Windows x64.";
+        VideoSetupIndeterminate = true;
         _preparation.Changed += OnPreparationChanged;
         ApplySnapshot();
     }
@@ -31,6 +40,8 @@ public sealed class ModelFooterViewModel : ObservableObject, IDisposable
     public IRelayCommand RetryCommand { get; }
 
     public IRelayCommand CancelCommand { get; }
+
+    public bool CanPrepareModel => RetryCommand.CanExecute(null);
 
     public string Message => _snapshot.Message;
 
@@ -43,7 +54,7 @@ public sealed class ModelFooterViewModel : ObservableObject, IDisposable
     };
 
     public bool IsActive => _snapshot.Phase is ModelPreparationPhase.Verifying or
-        ModelPreparationPhase.Downloading or ModelPreparationPhase.RuntimeLoading;
+        ModelPreparationPhase.Downloading or ModelPreparationPhase.FilesVerified or ModelPreparationPhase.RuntimeLoading;
 
     public bool IsIndeterminate => _snapshot.Phase is ModelPreparationPhase.NotStarted or
         ModelPreparationPhase.Verifying or ModelPreparationPhase.RuntimeLoading;
@@ -86,6 +97,7 @@ public sealed class ModelFooterViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(RuntimeStatus));
         RetryCommand.NotifyCanExecuteChanged();
         CancelCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanPrepareModel));
     }
 
     public void Dispose()

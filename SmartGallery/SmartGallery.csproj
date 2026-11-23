@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <Version>1.2.0</Version>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>SmartGallery</RootNamespace>
@@ -95,6 +96,7 @@
       <_WinUIResourcesToPublish Include="$(TargetDir)App.xbf" RelativePath="App.xbf" />
       <_WinUIResourcesToPublish Include="$(TargetDir)MainWindow.xbf" RelativePath="MainWindow.xbf" />
       <_WinUIResourcesToPublish Include="$(TargetDir)MainPage.xbf" RelativePath="MainPage.xbf" />
+      <_WinUIResourcesToPublish Include="$(TargetDir)AnalysisWindow.xbf" RelativePath="AnalysisWindow.xbf" />
       <_WinUIResourcesToPublish Include="$(TargetDir)Views\ImportProgressView.xbf" RelativePath="Views\ImportProgressView.xbf" />
     </ItemGroup>
     <Error Condition="'$(ProjectPriFullPath)' == ''" Text="The WinUI resource index path was not set." />

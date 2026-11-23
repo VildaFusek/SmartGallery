@@ -5,6 +5,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SmartGallery.Infrastructure;
+using SmartGallery.Infrastructure.Video;
 using SmartGallery.Application.Importing;
 using SmartGallery.Imaging;
 using SmartGallery.AI.Models;
@@ -40,6 +41,8 @@ namespace SmartGallery
                     new HostApplicationBuilderSettings { DisableDefaults = true });
                 builder.Logging.AddDebug();
                 builder.Services.AddSmartGalleryCatalog();
+                builder.Services.AddSingleton<FfmpegTools>();
+                builder.Services.AddSingleton<GalleryVideoService>();
                 builder.Services.AddSingleton<IMediaDateReader, WindowsMediaDateReader>();
                 builder.Services.AddSingleton<ICaptionImagePreprocessor, WindowsCaptionImagePreprocessor>();
                 builder.Services.AddSingleton<IPhotoPixelFingerprintReader, WindowsPhotoPixelFingerprintReader>();

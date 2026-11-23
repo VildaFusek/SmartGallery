@@ -8,13 +8,18 @@ První distribuční varianta: **Windows 11 x64, Unpackaged, rozbalovací ZIP**.
 **About:** Lokální galerie fotografií a videí pro Windows 11 s AI popisky, vyhledáváním a detekcí duplicit.  
 **Topics:** `winui3`, `windows`, `photo-gallery`, `dotnet`, `sqlite`, `offline-first`, `florence-2`
 
-**Název prvního vydání:** `SmartGallery <verze> – Windows x64`
+**Tag:** `v1.2`
 
-**Text vydání:**
+**Zpráva commitu:** `SmartGallery 1.2: dávkové převody médií, analýza galerie a údržba katalogu`
 
-> SmartGallery je lokální galerie pro Windows 11. Kopíruje média do spravované knihovny bez změny originálů, zobrazuje je na časové ose a umožňuje vyhledávání, lokální AI popisky a hledání přesných obrazových duplicit.
->
-> Stáhněte `SmartGallery-win-x64.zip`, rozbalte všechny soubory a spusťte `SmartGallery.exe`. Chybějící model pro AI popisky se stahuje samostatně (přibližně 1,09 GB); pro import a prohlížení není potřeba.
+## SmartGallery 1.2 – Windows x64
+
+- **Videa:** přehrávejte video přímo v galerii nebo převeďte celý výběr do MP4, MOV, WebM či MKV. Dva ukazatele rozlišují průběh celé dávky a aktuálního videa. U videa se známou délkou vidíte, kolik záznamu je převedeno a kolik zbývá. Po zastavení dostanete stručný souhrn místo výpisu FFmpeg.
+- **Fotografie:** jednotlivě i hromadně převádějte do JPEG, PNG nebo WebP. Při nahrazení kopie můžete předem porovnat velikost a rozměry výsledku. Zdrojové originály se nemění.
+- **Analýza galerie:** v samostatném okně najdete shodné a podobné fotografie, možné screenshoty i návrhy na úsporu místa. Během analýzy můžete dál procházet galerii; změny se provedou až po potvrzení.
+- **Správa knihovny:** kopie můžete přejmenovat přímo v galerii. Údržba katalogu po záloze odstraní záznamy o chybějících souborech; dočasně nedostupné složky pouze skryje.
+
+**Stažení:** rozbalte celý `SmartGallery-win-x64.zip` a spusťte `SmartGallery.exe`. FFmpeg a model pro lokální AI popisky lze stáhnout samostatně přes **Potřebné soubory**.
 
 ## Publikace z Windows
 

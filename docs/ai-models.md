@@ -1,28 +1,26 @@
 # Lokální obsahové pojmenování – kroky AI.1 až AI.4
 
 Uživatel schválil komunitní ONNX převod Florence-2-base-ft.
-Připraveno je ověření, automatické získání souborů a lokální generování popisku
+Připraveno je ověření, stažení souborů po potvrzení a lokální generování popisku
 jedné vybrané fotografie. Automatické obsahové názvy při importu ještě nejsou zapnuté.
 Import kopírováním funguje nezávisle na modelu.
-Uživatel potvrdil ruční kontrolu 14/14, ale požaduje automatickou přípravu.
 
-## Běžné použití – automaticky po startu
+## Běžné použití – místní kontrola po startu, stažení po potvrzení
 
 Po otevření aplikace běží příprava schváleného Florence-2 v BackgroundService.
 Nečeká se na ni při otevření okna ani při práci s katalogem.
-Ve spodní liště je ověřování/stahování, počty souborů, přenesené MiB a stav modulů.
+Nabídka **Potřebné soubory** ukazuje stav ověřování/stahování, počty souborů, přenesené MiB a stav modulů.
 Model s platnými 14/14 soubory se **nestahuje znovu a příprava nepotřebuje síť**.
 Od AI.4 se při nezměněných souborech používá uložený záznam místo opakovaného
 hashování a načítání čtyř grafů.
 
-Pokud soubor chybí, aplikace jej automaticky stáhne ze zdroje připnutého
+Pokud soubor chybí, vyber **Připravit model…** a potvrď stažení. Aplikace jej stáhne ze zdroje připnutého
 manifestem, ověří velikost/SHA-256 a teprve potom publikuje pod finálním názvem.
 Celý chybějící balíček má přibližně 1,09 GB. Během přípravy se neposílají
 fotografie, názvy fotografií ani biometrická data; nejde o cloudovou inferenci.
 
-Lišta má **Zastavit** a **Zkusit znovu**, pouze pro přípravu modelu.
-Bez připojení chyba přípravy nezastaví galerii/import; další pokus je ruční
-nebo při příštím startu. Neprobíhá nekonečné opakování downloadu.
+Přípravu modelu můžeš zastavit a znovu ji potvrdit. Chyba přípravy nezastaví galerii ani import;
+při příštím startu se opakuje pouze místní kontrola, ne stahování.
 Měřené připojení zatím není automaticky detekováno, přenos lze zastavit.
 
 Stávající soubor s nesprávnou velikostí/hashem se nepřepisuje ani nemaže.
@@ -89,7 +87,7 @@ nepřidává se druhý samostatný balíček Microsoft.ML.OnnxRuntime.
 
 ## Ruční stažení – volitelný pokročilý postup
 
-Pro běžné použití stačí spustit aplikaci; PowerShell již není nutný.
+Pro běžné použití stačí potvrdit stažení v aplikaci; PowerShell není nutný.
 Pokud přesto chceš model získat ručně, nejprve aplikaci zavři, aby nestahovala
 souběžně. Potom můžeš v PowerShellu **z kořene repozitáře** spustit tyto příkazy.
 Stahují přibližně 1,09 GB; jde o jednorázové získání modelu, ne cloudovou inferenci.
@@ -129,8 +127,8 @@ Nepoužívej soubory jiných revizí ani Git LFS textové ukazatele místo vah.
 2. Vyzkoušej totéž bez internetu – s platným kompletním modelem má kontrola projít.
 3. Chybějící soubor ověřuj na testovacím profilu nebo při zavřené aplikaci
    nedestruktivně odlož malý `generation_config.json` pod jiný název.
-   Po startu se má stáhnout pouze chybějící soubor, ne všechny grafy.
-4. Ověř Zastavit/Zkusit znovu, zachování hotových souborů a dostupnost katalogu.
+   Po startu se nemá nic stáhnout. Po potvrzení se má stáhnout jen chybějící soubor.
+4. Ověř zastavení a opětovné potvrzení, zachování hotových souborů a dostupnost katalogu.
    Při neplatném existujícím souboru očekávej chybu bez jeho přepsání.
 5. Po kontrole souborů čekej v kroku AI.3 také načtení grafů podle oddílu níže.
    Popisky ani obsahové názvy se zatím nevytvářejí.

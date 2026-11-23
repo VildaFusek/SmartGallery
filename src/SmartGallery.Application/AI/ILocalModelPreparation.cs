@@ -10,7 +10,8 @@ public enum ModelPreparationPhase
     Canceled,
     RuntimeLoading,
     RuntimeValidated,
-    RuntimeFailed
+    RuntimeFailed,
+    AwaitingDownload
 }
 
 public sealed record ModelPreparationSnapshot(
@@ -31,6 +32,8 @@ public sealed record ModelPreparationSnapshot(
 public interface ILocalModelProvisioner
 {
     Task PrepareAsync(IProgress<ModelPreparationSnapshot> progress, CancellationToken cancellationToken);
+
+    Task PrepareAsync(bool allowDownload, IProgress<ModelPreparationSnapshot> progress, CancellationToken cancellationToken);
 }
 
 public interface ILocalModelPreparation

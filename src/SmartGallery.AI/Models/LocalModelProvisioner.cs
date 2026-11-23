@@ -10,10 +10,14 @@ public sealed class LocalModelProvisioner(
     CaptionModelVerificationCache cache) : ILocalModelProvisioner
 {
     public Task PrepareAsync(IProgress<ModelPreparationSnapshot> progress, CancellationToken cancellationToken) =>
-        Task.Run(() => PrepareCoreAsync(progress, cancellationToken), cancellationToken);
+        PrepareAsync(false, progress, cancellationToken);
+
+    public Task PrepareAsync(bool allowDownload, IProgress<ModelPreparationSnapshot> progress,
+        CancellationToken cancellationToken) =>
+        Task.Run(() => PrepareCoreAsync(allowDownload, progress, cancellationToken), cancellationToken);
 
     private async Task PrepareCoreAsync(
-        IProgress<ModelPreparationSnapshot> progress, CancellationToken cancellationToken)
+        bool allowDownload, IProgress<ModelPreparationSnapshot> progress, CancellationToken cancellationToken)
     {
         using var resource = typeof(LocalModelProvisioner).Assembly
             .GetManifestResourceStream("SmartGallery.AI.ModelManifest.json")
@@ -55,6 +59,10 @@ public sealed class LocalModelProvisioner(
             if (!await cache.IsCurrentAsync(file, cancellationToken) &&
                 !await VerifyExistingAsync(path, file, cancellationToken))
             {
+                if (!allowDownload)
+                {
+                    continue;
+                }
                 var url = file.Url ?? $"https://huggingface.co/{manifest.Repository}/resolve/{manifest.Revision}/{file.Path}";
                 var uri = new Uri(url, UriKind.Absolute);
                 if (uri.Scheme != Uri.UriSchemeHttps || uri.Host != "huggingface.co")
@@ -70,8 +78,15 @@ public sealed class LocalModelProvisioner(
             verified++;
             completed += file.Bytes;
         }
-        Report(ModelPreparationPhase.FilesVerified,
-            "Florence-2: soubory ověřeny. AI inference ještě není zapojena.");
+        if (verified < manifest.Files.Count)
+        {
+            Report(ModelPreparationPhase.AwaitingDownload,
+                $"Florence-2: ke stažení {(total - completed) / 1048576d:N0} MiB. Čekám na potvrzení.");
+        }
+        else
+        {
+            Report(ModelPreparationPhase.FilesVerified, "Florence-2: soubory ověřeny.");
+        }
     }
 
     private static string ResolvePath(string root, CaptionModelFile file)

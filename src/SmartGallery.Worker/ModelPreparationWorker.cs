@@ -24,10 +24,7 @@ public sealed class ModelPreparationWorker(
     {
         lock (_gate)
         {
-            if (_attempt is null)
-            {
-                _requests.Writer.TryWrite(true);
-            }
+            _requests.Writer.TryWrite(true);
         }
     }
 
@@ -44,26 +41,31 @@ public sealed class ModelPreparationWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _requests.Writer.TryWrite(false);
         await Task.Yield();
-        _requests.Writer.TryWrite(true);
         try
         {
             while (await _requests.Reader.WaitToReadAsync(stoppingToken))
             {
-                if (!_requests.Reader.TryRead(out _))
-                {
-                    continue;
-                }
                 using var attempt = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                bool allowDownload;
                 lock (_gate)
                 {
+                    if (!_requests.Reader.TryRead(out allowDownload))
+                    {
+                        continue;
+                    }
                     _attempt = attempt;
                 }
                 try
                 {
                     SetState(new ModelPreparationSnapshot(ModelPreparationPhase.Verifying, "Ověřuji lokální model…"));
-                    await provisioner.PrepareAsync(new PreparationProgress(SetState), attempt.Token);
+                    await provisioner.PrepareAsync(allowDownload, new PreparationProgress(SetState), attempt.Token);
                     attempt.Token.ThrowIfCancellationRequested();
+                    if (Current.Phase == ModelPreparationPhase.AwaitingDownload)
+                    {
+                        continue;
+                    }
                     SetState(Current with
                     {
                         Phase = ModelPreparationPhase.RuntimeLoading,

@@ -4,6 +4,10 @@
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="NetVips" />
+    <PackageReference Include="NetVips.Native.win-x64" />
+    <PackageReference Include="NetVips.Native.win-x86" />
+    <PackageReference Include="NetVips.Native.win-arm64" />
     <ProjectReference Include="..\SmartGallery.Application\SmartGallery.Application.csproj" />
   </ItemGroup>
 </Project>

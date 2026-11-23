@@ -22,6 +22,18 @@ public sealed partial class MainPage
 
     private void OnGalleryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(GalleryViewModel.IsGalleryOpen))
+        {
+            SyncVideoSelection();
+        }
+        else if (e.PropertyName == nameof(GalleryViewModel.IsBusy))
+        {
+            UpdateSelectedVideoButtons();
+        }
+        if (_videoFile is not null && e.PropertyName is (nameof(GalleryViewModel.CanChangeFilters) or nameof(GalleryViewModel.VisibleFiles)))
+        {
+            UpdateVideoButtons();
+        }
         if (e.PropertyName == nameof(GalleryViewModel.RootFolder))
         {
             RebuildFolderTree();
@@ -58,10 +70,20 @@ public sealed partial class MainPage
         }
     }
 
-    private void OnGalleryViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
+    private void RestoreGalleryScrollPosition(double position)
     {
-        var scrollViewer = (ScrollViewer)sender;
-        if (_galleryVerticalOffset == scrollViewer.VerticalOffset)
+        if (!ViewModel.IsGalleryOpen || _galleryScrollViewer is not { } scrollViewer)
+        {
+            return;
+        }
+
+        GalleryWorkspace.UpdateLayout();
+        scrollViewer.ChangeView(null, Math.Min(position, scrollViewer.ScrollableHeight), null, disableAnimation: true);
+    }
+
+    private void OnGalleryViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
+    {
+        if (sender is not ScrollViewer scrollViewer || _galleryVerticalOffset == scrollViewer.VerticalOffset)
         {
             return;
         }
@@ -132,7 +154,12 @@ public sealed partial class MainPage
             return;
         }
 
-        foreach (var year in ViewModel.GetChildFolders(library))
+        var years = ViewModel.GetChildFolders(library);
+        if (years.Count == 0)
+        {
+            FolderTree.RootNodes.Add(CreateFolderNode(library));
+        }
+        foreach (var year in years)
         {
             var node = CreateFolderNode(year);
             FolderTree.RootNodes.Add(node);

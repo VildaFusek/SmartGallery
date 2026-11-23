@@ -9,6 +9,23 @@ public sealed partial class SqliteGalleryCatalog
 {
     private const string TrashDirectoryName = ".smartgallery-trash";
 
+    public Task<IReadOnlyList<GalleryTrashItem>> StagePermanentDeletionAsync(Library library,
+        IReadOnlyList<GalleryFile> files, CancellationToken cancellationToken) =>
+        Task.Run<IReadOnlyList<GalleryTrashItem>>(async () =>
+        {
+            var selection = files.DistinctBy(item => item.Id).ToArray();
+            if (selection.Any(item => !IsTrashItemPath(item.RelativePath) ||
+                FolderImportPreviewService.GetMediaKind(Path.GetExtension(item.RelativePath)) != item.Kind))
+            {
+                throw new IOException("Výběr obsahuje neplatnou kopii galerie.");
+            }
+            var slot = await MoveToTrashCoreAsync(library, selection, cancellationToken, requireSnapshot: true);
+            var batch = Path.GetFileName(slot);
+            var trashedAt = DateTimeOffset.UtcNow;
+            return selection.Select(item => new GalleryTrashItem(batch, item.RelativePath, item.Kind,
+                item.SizeBytes, item.LastWriteTimeUtc, trashedAt)).ToArray();
+        }, cancellationToken);
+
     public Task<IReadOnlyList<GalleryTrashItem>> GetTrashAsync(Library library, CancellationToken cancellationToken) =>
         Task.Run<IReadOnlyList<GalleryTrashItem>>(() =>
         {

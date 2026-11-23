@@ -183,8 +183,8 @@ App jej skládá v DI. Vestavěný manifest připíná revizi, velikosti a SHA-2
 Kontrola je lokální, read-only, streamovaná, zrušitelná a běží mimo UI thread.
 JSON používá source-generated metadata, nikoli reflektivní deserializaci.
 
-Model se hledá v lokálních datech uživatele. Od kroku AI.2 se chybějící soubory
-získávají automaticky, ale neprovádí se Python/custom remote code.
+Model se hledá v lokálních datech uživatele. Chybějící soubory se získávají až po
+potvrzení uživatelem a neprovádí se Python/custom remote code.
 Ověření souborů není načtení ONNX grafů ani potvrzení funkčního captioningu.
 Generování obsahových názvů zůstává zakázané.
 Detaily a licenční podmínky viz `ai-models.md`.
@@ -196,7 +196,7 @@ Závisí pouze na aplikačním ILocalModelProvisioner a Hosting.Abstractions.
 Zachována je uživatelská verze Hosting 11.0.0; Abstractions 11.0.0 byla ověřena
 v lokální NuGet cache včetně podpory net10.0.
 
-Worker spustí jeden pokus po startu a další jen na vyžádání přes omezený Channel.
+Worker spustí místní kontrolu po startu a další pokus s povoleným stažením až na vyžádání přes omezený Channel.
 Výjimka přípravy nezastavuje host ani galerii. Stav je neměnný snapshot
 a událost; ModelFooterViewModel přenáší změny přes DispatcherQueue na UI thread
 a při dispose se odhlašuje. Stav katalogu/importu publikuje UI ze skutečných
@@ -204,16 +204,15 @@ výsledků načtení a nastavené knihovny, nezávisle na stahování.
 
 LocalModelProvisioner v AI čte vestavěný manifest, streamuje HTTPS přes sdílený
 HttpClient, ověřuje délku/SHA-256 a publikuje vlastní nový temp soubor bez overwrite.
-Síť se použije jen pro chybějící soubory. Neplatný existující soubor automaticky
+Síť se použije až po potvrzení a jen pro chybějící soubory. Neplatný existující soubor automaticky
 neopravuje přepsáním. Povoleny jsou počáteční HTTPS adresy Hugging Face;
 běžné HTTPS přesměrování na jejich CDN zajišťuje HttpClient.
 Zrušení uklízí pouze vlastní temp; hotové soubory zůstávají. Výpadek procesu
 může zanechat temp, HTTP resume a automatický úklid starých temp zatím nejsou.
 Modelové soubory nejsou součástí operací s originálními fotografiemi.
 
-Spodní lišta odlišuje FilesVerified, validaci ONNX runtime a dosud nezapojený captioning.
-Automatický download je uživatelem výslovně požadovaný, ale nezahrnuje
-cloudovou inferenci, telemetrii ani stahování dalších neschválených modelů.
+Nabídka Potřebné soubory zobrazuje stav kontroly modelu, stahování a validaci ONNX runtime společně se stavem nástrojů FFmpeg.
+Stažení neznamená cloudovou inferenci, telemetrii ani stahování dalších neschválených modelů.
 
 ## CPU ONNX runtime – krok AI.3
 

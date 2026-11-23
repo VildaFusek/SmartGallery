@@ -90,17 +90,23 @@ public sealed partial class SqliteGalleryCatalog(IDbContextFactory<CatalogDbCont
         Task.Run(() => MoveToTrashCoreAsync(library, files, cancellationToken, retained), cancellationToken);
 
     public Task RenamePhotoAsync(Library library, GalleryFile file, string newName, CancellationToken cancellationToken) =>
-        Task.Run(() => RenamePhotoCoreAsync(library, file, newName, cancellationToken), cancellationToken);
+        file.Kind == MediaKind.Photo
+            ? RenameFileAsync(library, file, newName, cancellationToken)
+            : Task.FromException(new IOException("Položka není fotografie."));
 
-    private async Task RenamePhotoCoreAsync(
+    public Task RenameFileAsync(Library library, GalleryFile file, string newName, CancellationToken cancellationToken) =>
+        Task.Run(() => RenameFileCoreAsync(library, file, newName, cancellationToken), cancellationToken);
+
+    private async Task RenameFileCoreAsync(
         Library library, GalleryFile file, string newName, CancellationToken cancellationToken)
     {
         var extension = Path.GetExtension(file.RelativePath);
         if (Path.GetFileName(newName) != newName ||
-            FolderImportPreviewService.GetMediaKind(extension) != MediaKind.Photo ||
+            string.IsNullOrWhiteSpace(Path.GetFileNameWithoutExtension(newName)) ||
+            FolderImportPreviewService.GetMediaKind(extension) != file.Kind ||
             !string.Equals(Path.GetExtension(newName), extension, StringComparison.Ordinal))
         {
-            throw new IOException("Nový název musí zachovat příponu fotografie a nesmí obsahovat složku.");
+            throw new IOException("Nový název musí zachovat příponu souboru a nesmí obsahovat složku.");
         }
         FolderImportPreviewService.ValidateRelativePath(newName);
 
@@ -110,13 +116,14 @@ public sealed partial class SqliteGalleryCatalog(IDbContextFactory<CatalogDbCont
             .Select(item => item.RootPath).SingleOrDefaultAsync(cancellationToken);
         var files = FilesForLibrary(context, library.Id);
         var record = await files.SingleOrDefaultAsync(item => item.Id == file.Id, cancellationToken);
-        if (currentRoot != library.RootPath || record is null || record.RelativePath != file.RelativePath)
+        if (currentRoot != library.RootPath || record is null || record.RelativePath != file.RelativePath ||
+            record.SizeBytes != file.SizeBytes || record.LastWriteTimeUtc != file.LastWriteTimeUtc)
         {
             throw new InvalidOperationException("Záznam se změnil. Obnov stav galerie a zkus to znovu.");
         }
 
         var relativeDestination = Path.Combine(file.Folder, newName);
-        if (string.Equals(record.RelativePath, relativeDestination, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(record.RelativePath, relativeDestination, StringComparison.Ordinal))
         {
             return;
         }
@@ -125,7 +132,7 @@ public sealed partial class SqliteGalleryCatalog(IDbContextFactory<CatalogDbCont
         {
             throw new IOException("Na původní soubor odkazuje více záznamů katalogu.");
         }
-        if (await files.AnyAsync(item =>
+        if (await files.AnyAsync(item => item.Id != file.Id &&
                 EF.Functions.Collate(item.RelativePath, "NOCASE") == relativeDestination, cancellationToken))
         {
             throw new IOException("Navržený název už v této složce používá jiná položka katalogu.");
@@ -163,7 +170,7 @@ public sealed partial class SqliteGalleryCatalog(IDbContextFactory<CatalogDbCont
 
     private async Task<string> MoveToTrashCoreAsync(
         Library library, IReadOnlyList<GalleryFile> files, CancellationToken cancellationToken,
-        IReadOnlyList<GalleryFile>? retained = null)
+        IReadOnlyList<GalleryFile>? retained = null, bool requireSnapshot = false)
     {
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -282,7 +289,7 @@ public sealed partial class SqliteGalleryCatalog(IDbContextFactory<CatalogDbCont
         AssetFile RequireMatch(GalleryFile file)
         {
             if (!byId.TryGetValue(file.Id, out var record) || record.RelativePath != file.RelativePath ||
-                (retained is not null && (record.SizeBytes != file.SizeBytes ||
+                ((requireSnapshot || retained is not null) && (record.SizeBytes != file.SizeBytes ||
                     record.LastWriteTimeUtc != file.LastWriteTimeUtc)))
             {
                 throw new InvalidOperationException("Záznam se změnil. Obnov stav galerie a zkus to znovu.");

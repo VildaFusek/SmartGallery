@@ -6,6 +6,7 @@ using SmartGallery.Domain;
 namespace SmartGallery.ViewModels;
 
 internal enum GalleryAnalysisFilter { All, Analyzed, NotAnalyzed, PendingName }
+internal enum GallerySort { Timeline, NameAscending, NameDescending, SizeDescending, SizeAscending, DateDescending, DateAscending }
 
 public sealed class GalleryTimelineGroup : ReadOnlyCollection<GalleryFile>
 {
@@ -69,7 +70,7 @@ public sealed class GalleryTimelineGroup : ReadOnlyCollection<GalleryFile>
     }
 
     internal static (IReadOnlyList<GalleryTimelineGroup> Groups, IReadOnlyList<GalleryFile> Files) Filter(
-        IReadOnlyList<GalleryTimelineGroup> timeline, string search, MediaKind? kind,
+        IReadOnlyList<GalleryTimelineGroup> timeline, string search, MediaKind? kind, string? extension,
         GalleryAnalysisFilter analysisFilter, CancellationToken cancellationToken)
     {
         var terms = search.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -83,7 +84,7 @@ public sealed class GalleryTimelineGroup : ReadOnlyCollection<GalleryFile>
             {
                 continue;
             }
-            IList<GalleryFile> matches = terms.Length == 0 && analysisFilter == GalleryAnalysisFilter.All ? group : group.Where(file =>
+            IList<GalleryFile> matches = terms.Length == 0 && extension is null && analysisFilter == GalleryAnalysisFilter.All ? group : group.Where(file =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var matchesState = analysisFilter switch
@@ -93,7 +94,8 @@ public sealed class GalleryTimelineGroup : ReadOnlyCollection<GalleryFile>
                     GalleryAnalysisFilter.PendingName => file.HasPendingName,
                     _ => true
                 };
-                return matchesState && terms.All(term =>
+                return matchesState && (extension is null ||
+                    extension.Equals(Path.GetExtension(file.RelativePath), StringComparison.OrdinalIgnoreCase)) && terms.All(term =>
                     Contains(file.RelativePath, term) || Contains(file.Analysis?.Caption, term) ||
                     Contains(file.Analysis?.SuggestedName, term) || Contains(group.YearLabel, term) ||
                     Contains(group.SectionLabel, term));
@@ -109,6 +111,41 @@ public sealed class GalleryTimelineGroup : ReadOnlyCollection<GalleryFile>
             }
         }
         return (groups, files);
+    }
+
+    internal static (IReadOnlyList<GalleryTimelineGroup> Groups, IReadOnlyList<GalleryFile> Files) Sort(
+        IReadOnlyList<GalleryFile> files, GallerySort sort, IReadOnlyDictionary<Guid, DateTime> dates, CancellationToken token)
+    {
+        var names = StringComparer.Create(Czech, ignoreCase: true);
+        var source = files.Select(file =>
+        {
+            token.ThrowIfCancellationRequested();
+            return file;
+        });
+        DateTime Date(GalleryFile file) => dates.TryGetValue(file.Id, out var date) ? date : GetSortDate(file);
+        var ordered = sort switch
+        {
+            GallerySort.NameAscending => source.OrderBy(file => file.Name, names),
+            GallerySort.NameDescending => source.OrderByDescending(file => file.Name, names),
+            GallerySort.SizeAscending => source.OrderBy(file => file.SizeBytes),
+            GallerySort.SizeDescending => source.OrderByDescending(file => file.SizeBytes),
+            GallerySort.DateAscending => source.OrderBy(file => Date(file) == DateTime.MinValue).ThenBy(Date),
+            _ => source.OrderByDescending(Date)
+        };
+        var sorted = ordered.ThenBy(file => file.RelativePath, names).ToArray();
+        token.ThrowIfCancellationRequested();
+        var groups = new[] { new GalleryTimelineGroup("", "", "", "Seřazená média", false, sorted) };
+        return (groups, sorted);
+    }
+
+    internal static DateTime GetSortDate(GalleryFile file)
+    {
+        if (GetTimelineDate(file) is not { } date)
+        {
+            return DateTime.MinValue;
+        }
+        var modified = file.LastWriteTimeUtc.LocalDateTime;
+        return DateOnly.FromDateTime(modified) == date ? modified : date.ToDateTime(TimeOnly.MinValue);
     }
 
     private static bool Contains(string? text, string term) => text is not null &&

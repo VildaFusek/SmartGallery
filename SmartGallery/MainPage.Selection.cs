@@ -17,8 +17,10 @@ namespace SmartGallery;
 public sealed partial class MainPage
 {
     private static readonly IValueConverter SelectionFrameOpacity = new SelectionFrameOpacityConverter();
+    private static readonly IValueConverter SelectionCheckBoxVisibility = new SelectionCheckBoxVisibilityConverter();
     private Pointer? _marqueePointer;
     private MarqueeSurface? _marqueeSurface;
+    private GridViewItem? _marqueeStartTile;
     private Point _marqueeOrigin;
     private bool _marqueeActive;
     private bool _marqueeCaptured;
@@ -38,9 +40,18 @@ public sealed partial class MainPage
             throw new NotSupportedException();
     }
 
+    private sealed class SelectionCheckBoxVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language) =>
+            value is true ? Visibility.Visible : Visibility.Collapsed;
+
+        public object ConvertBack(object value, Type targetType, object parameter, string language) =>
+            throw new NotSupportedException();
+    }
+
     private void OnSelectionFrameLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is Border frame && FindAncestor<GridViewItem>(frame) is { } item)
+        if (sender is ContentControl frame && FindAncestor<GridViewItem>(frame) is { } item)
         {
             frame.SetBinding(UIElement.OpacityProperty, new Binding
             {
@@ -53,7 +64,34 @@ public sealed partial class MainPage
     }
 
     private void OnSelectionFrameUnloaded(object sender, RoutedEventArgs e) =>
-        ((Border)sender).ClearValue(UIElement.OpacityProperty);
+        ((ContentControl)sender).ClearValue(UIElement.OpacityProperty);
+
+    private void OnSelectionCheckBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox checkBox && FindAncestor<GridViewItem>(checkBox) is { } item)
+        {
+            checkBox.SetBinding(ToggleButton.IsCheckedProperty, new Binding
+            {
+                Source = item,
+                Path = new PropertyPath(nameof(GridViewItem.IsSelected)),
+                Mode = BindingMode.TwoWay
+            });
+            checkBox.SetBinding(VisibilityProperty, new Binding
+            {
+                Source = MultiSelectToggle,
+                Path = new PropertyPath(nameof(ToggleMenuFlyoutItem.IsChecked)),
+                Mode = BindingMode.OneWay,
+                Converter = SelectionCheckBoxVisibility
+            });
+        }
+    }
+
+    private void OnSelectionCheckBoxUnloaded(object sender, RoutedEventArgs e)
+    {
+        var checkBox = (CheckBox)sender;
+        checkBox.ClearValue(ToggleButton.IsCheckedProperty);
+        checkBox.ClearValue(VisibilityProperty);
+    }
 
     private void InitializeGalleryInteraction()
     {
@@ -87,6 +125,7 @@ public sealed partial class MainPage
         else
         {
             ViewModel.SetSelection(items.Count, items.Count == 1 ? items[0] as GalleryFile : null);
+            SyncVideoSelection();
         }
     }
 
@@ -98,23 +137,22 @@ public sealed partial class MainPage
         }
     }
 
+    private void OnMultiSelectClick(object sender, RoutedEventArgs e)
+    {
+        EndMarquee();
+        var enabled = MultiSelectToggle.IsChecked;
+        GalleryGrid.SelectionMode = enabled ? ListViewSelectionMode.Multiple : ListViewSelectionMode.Extended;
+    }
+
     private async void OnGalleryKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Delete && ViewModel.CanDelete)
-        {
-            e.Handled = true;
-            if (!e.KeyStatus.WasKeyDown)
-            {
-                await ConfirmDeleteSelectionAsync();
-            }
-            return;
-        }
-        if (!ViewModel.CanBrowse || e.Key != VirtualKey.Enter)
+        var source = e.OriginalSource as DependencyObject;
+        if (!ViewModel.CanBrowse || e.Key != VirtualKey.Enter || FindAncestor<CheckBox>(source) is not null)
         {
             return;
         }
 
-        var tile = FindAncestor<GridViewItem>(e.OriginalSource as DependencyObject);
+        var tile = FindAncestor<GridViewItem>(source);
         if ((tile?.Content ?? GalleryGrid.SelectedItem) is not GalleryFile file)
         {
             return;
@@ -128,16 +166,33 @@ public sealed partial class MainPage
         {
             await ShowPhotoAsync(file, tile);
         }
+        else if (file.Kind == MediaKind.Video)
+        {
+            await ShowVideoAsync(file, tile);
+        }
     }
 
-    private void OnWorkspaceKeyDown(object sender, KeyRoutedEventArgs e)
+    private async void OnWorkspaceKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (!ViewModel.CanNavigateLibrary || e.Key != VirtualKey.A || !IsKeyDown(VirtualKey.Control) ||
-            FindAncestor<TextBox>(e.OriginalSource as DependencyObject) is not null)
+        var source = e.OriginalSource as DependencyObject;
+        if (FindAncestor<TextBox>(source) is not null)
         {
             return;
         }
-        if (!e.Handled || FindAncestor<GridView>(e.OriginalSource as DependencyObject) is null)
+        if (e.Key == VirtualKey.Delete && ViewModel.CanDelete)
+        {
+            e.Handled = true;
+            if (!e.KeyStatus.WasKeyDown)
+            {
+                await ConfirmDeleteSelectionAsync(permanent: IsKeyDown(VirtualKey.Shift));
+            }
+            return;
+        }
+        if (!ViewModel.CanNavigateLibrary || e.Key != VirtualKey.A || !IsKeyDown(VirtualKey.Control))
+        {
+            return;
+        }
+        if (!e.Handled || FindAncestor<GridView>(source) is null)
         {
             (ViewModel.IsTrashOpen ? TrashGrid : GalleryGrid).SelectAll();
         }
@@ -146,11 +201,20 @@ public sealed partial class MainPage
 
     private async void OnGalleryDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
-        var tile = FindAncestor<GridViewItem>(e.OriginalSource as DependencyObject);
-        if (ViewModel.CanBrowse && tile?.Content is GalleryFile { Kind: MediaKind.Photo } file)
+        var source = e.OriginalSource as DependencyObject;
+        var tile = FindAncestor<GridViewItem>(source);
+        if (ViewModel.CanBrowse && tile?.Content is GalleryFile file &&
+            FindAncestor<CheckBox>(source) is null && FindAncestor<HyperlinkButton>(source) is null)
         {
             e.Handled = true;
-            await ShowPhotoAsync(file, tile);
+            if (file.Kind == MediaKind.Photo)
+            {
+                await ShowPhotoAsync(file, tile);
+            }
+            else if (file.Kind == MediaKind.Video)
+            {
+                await ShowVideoAsync(file, tile);
+            }
         }
     }
 
@@ -161,11 +225,15 @@ public sealed partial class MainPage
     {
         var host = (Grid)sender;
         var inTrash = ReferenceEquals(host, TrashHost);
+        var multiSelect = !inTrash && GalleryGrid.SelectionMode == ListViewSelectionMode.Multiple;
+        var source = e.OriginalSource as DependencyObject;
         var point = e.GetCurrentPoint(host);
         if (!(inTrash ? ViewModel.IsTrashOpen && ViewModel.CanNavigateLibrary : ViewModel.CanBrowse) ||
             e.Pointer.PointerDeviceType != PointerDeviceType.Mouse ||
             !point.Properties.IsLeftButtonPressed ||
-            FindAncestor<ScrollBar>(e.OriginalSource as DependencyObject) is not null)
+            FindAncestor<CheckBox>(source) is not null ||
+            FindAncestor<HyperlinkButton>(source) is not null ||
+            FindAncestor<ScrollBar>(source) is not null)
         {
             return;
         }
@@ -175,8 +243,13 @@ public sealed partial class MainPage
             : new MarqueeSurface(host, GalleryGrid, SelectionRectangle);
         _marqueeSurface = surface;
         _marqueePointer = e.Pointer;
+        _marqueeStartTile = multiSelect ? FindAncestor<GridViewItem>(source) : null;
         _marqueeOrigin = point.Position;
         _marqueeModifiers = e.KeyModifiers & (VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift);
+        if (multiSelect && _marqueeModifiers == VirtualKeyModifiers.None)
+        {
+            _marqueeModifiers = VirtualKeyModifiers.Shift;
+        }
         _marqueeBase = _marqueeModifiers == VirtualKeyModifiers.None ? [] :
             surface.Items.SelectedItems.ToHashSet();
     }
@@ -203,6 +276,7 @@ public sealed partial class MainPage
                 return;
             }
             _marqueeActive = true;
+            _marqueeStartTile?.ReleasePointerCapture(e.Pointer);
             _marqueeCaptured = surface.Host.CapturePointer(e.Pointer);
             _updatingMarquee = true;
             try
@@ -360,6 +434,7 @@ public sealed partial class MainPage
         var surface = _marqueeSurface;
         _marqueeSurface = null;
         _marqueePointer = null;
+        _marqueeStartTile = null;
         _marqueeActive = false;
         _marqueeCaptured = false;
         if (surface is not null)
